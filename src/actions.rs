@@ -1,7 +1,7 @@
 use crate::config::load_config;
-use crate::system::has_ip;
-use crate::system::interface_exists;
-use crate::system::interface_has_ip;
+use crate::rollback;
+use crate::system::{has_ip, interface_exists, interface_has_ip};
+use crate::types::{AppliedChange, ApplyAction};
 use std::path::Path;
 use std::process::Command;
 
@@ -99,7 +99,7 @@ fn get_interface_ip(name: &str) -> Option<String> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
         if line.trim_start().starts_with("inet ") {
-            let parts: Vec<&str> = line.trim().split_whitespace().collect();
+            let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
                 return Some(parts[1].to_string()); // e.g. "192.168.10.1/24"
             }
@@ -137,7 +137,17 @@ pub fn preview(config_path: &Path) {
 }
 
 pub fn apply(config_path: &Path) {
+    let mut changes = Vec::new();
+
+    if let Err(e) = try_apply(config_path, &mut changes) {
+        eprintln!("❌ Apply failed: {}", e);
+        rollback::rollback(&changes);
+    }
+}
+
+fn try_apply(config_path: &Path, _changes: &mut Vec<AppliedChange>) -> Result<(), String> {
     let config = load_config(config_path);
+    let mut changes: Vec<AppliedChange> = Vec::new();
 
     if let Some(bridges) = config.bridge {
         for (name, bridge) in bridges {
@@ -146,10 +156,19 @@ pub fn apply(config_path: &Path) {
             // 1. Create bridge if it doesn't already exist
             if !interface_exists(&name) {
                 println!("Checking bridge: {}", name);
-                let _ = Command::new("ip")
+                let status = Command::new("ip")
                     .args(["link", "add", &name, "type", "bridge"])
                     .status()
-                    .expect("Failed to create bridge.");
+                    .map_err(|e| format!("Failed to create bridge {}: {}", name, e))?;
+
+                if !status.success() {
+                    return Err(format!("Bridge creation failed: {}", name));
+                }
+
+                changes.push(AppliedChange {
+                    iface: name.clone(),
+                    action: ApplyAction::CreatedInterface,
+                });
             } else {
                 println!("Bridge {} already exists. Skiping creation.", name);
             }
@@ -183,6 +202,10 @@ pub fn apply(config_path: &Path) {
                     .args(["addr", "add", ip, "dev", &name])
                     .status()
                     .expect("Failed to assign IP address");
+                changes.push(AppliedChange {
+                    iface: name.clone(),
+                    action: ApplyAction::AssignedStaticIp(ip.clone()),
+                });
             } else if bridge.dhcp.unwrap_or(false) {
                 if has_ip(&name) {
                     println!("{} already has an IP address. Skipping dhclient.", name);
@@ -192,6 +215,10 @@ pub fn apply(config_path: &Path) {
                         .arg(&name)
                         .status()
                         .expect("Failed to run dhclient");
+                    changes.push(AppliedChange {
+                        iface: name.clone(),
+                        action: ApplyAction::RanDhcp,
+                    });
                 }
             }
         }
@@ -203,7 +230,7 @@ pub fn apply(config_path: &Path) {
             println!("Applying VLAN: {} (id {})", name, vlan.id);
 
             if !interface_exists(&name) {
-                let _ = Command::new("ip")
+                let status = Command::new("ip")
                     .args([
                         "link",
                         "add",
@@ -217,7 +244,16 @@ pub fn apply(config_path: &Path) {
                         &vlan.id.to_string(),
                     ])
                     .status()
-                    .expect("Failed to create VLAN interface");
+                    .map_err(|e| format!("Failed to create VLAN {}: {}", name, e))?;
+
+                if !status.success() {
+                    return Err(format!("VLAN creation failed: {}", name));
+                }
+
+                changes.push(AppliedChange {
+                    iface: name.clone(),
+                    action: ApplyAction::CreatedInterface,
+                });
             } else {
                 println!("VLAN interface {} already exists. Skipping creation.", name);
             }
@@ -231,6 +267,10 @@ pub fn apply(config_path: &Path) {
                         .args(["addr", "add", ip, "dev", &name])
                         .status()
                         .expect("Failed to assign IP to VLAN interface");
+                    changes.push(AppliedChange {
+                        iface: name.clone(),
+                        action: ApplyAction::AssignedStaticIp(ip.clone()),
+                    });
                 }
             }
 
@@ -240,4 +280,36 @@ pub fn apply(config_path: &Path) {
                 .expect("Failed to bring up VLAN interface.");
         }
     }
+
+    Ok(())
+}
+
+pub fn reset(config_path: &Path) {
+    let config = load_config(config_path);
+
+    if let Some(vlans) = config.vlan {
+        for (name, _) in vlans {
+            if interface_exists(&name) {
+                println!("Deleting VLAN interface: {}", name);
+                let _ = Command::new("ip").args(["link", "delete", &name]).status();
+            } else {
+                println!("VLAN {} not found, skipping", name);
+            }
+        }
+    }
+
+    if let Some(bridges) = config.bridge {
+        for (name, _) in bridges {
+            if interface_exists(&name) {
+                println!("Deleting bridge interface: {}", name);
+                let _ = Command::new("ip")
+                    .args(["link", "delete", &name, "type", "bridge"])
+                    .status();
+            } else {
+                println!("Bridge {} not found, skipping", name);
+            }
+        }
+    }
+
+    println!("✅ Reset complete.");
 }

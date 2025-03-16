@@ -25,4 +25,8 @@ pub enum Command {
         #[arg(value_name = "CONFIG")]
         config_path: Option<std::path::PathBuf>,
     },
+    Reset {
+        #[arg(value_name = "CONFIG")]
+        config_path: Option<std::path::PathBuf>,
+    },
 }

@@ -1,7 +1,9 @@
 mod actions;
 mod cli;
 mod config;
+mod rollback;
 mod system;
+mod types;
 
 use crate::cli::{Cli, Command};
 use crate::config::resolve_config_path;
@@ -26,6 +28,10 @@ fn main() {
         Command::Status { config_path } => {
             let path = resolve_config_path(config_path);
             crate::actions::status(&path);
+        }
+        Command::Reset { config_path } => {
+            let path = resolve_config_path(config_path);
+            crate::actions::reset(&path);
         }
     }
 }
