@@ -26,14 +26,14 @@ pub struct Config {
 pub fn resolve_config_path(input: &Option<PathBuf>) -> PathBuf {
     match input {
         Some(path) => path.clone(),
-        None => Path::new("/etc/netcraft.toml").to_path_buf(),
+        None => Path::new("/etc/adn.toml").to_path_buf(),
     }
 }
 
 pub fn load_config(path: &Path) -> Config {
     if !path.exists() {
         eprintln!("⚠️  No configuration file found at {}", path.display());
-        eprintln!("   You can create one manually or run `netcraft --init` (soon!)");
+        eprintln!("   You can create one manually or run `adn --init` (soon!)");
         process::exit(1);
     }
 
