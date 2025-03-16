@@ -1,9 +1,9 @@
-# netcraft
+# adn
 
-**netcraft** is a declarative network orchestrator for Linux.
+**adn** is a declarative network orchestrator for Linux.
 
 🚧 **v0.1.0 — Ephemeral only**  
-Applies bridges, VLANs, and IPs at runtime using a `netcraft.toml` file.  
+Applies bridges, VLANs, and IPs at runtime using a `adn.toml` file.  
 Persistent config generation (e.g., /etc/network/interfaces) is planned for later.
 
 ## Features
@@ -12,12 +12,12 @@ Persistent config generation (e.g., /etc/network/interfaces) is planned for late
 - Idempotent bridge and VLAN creation
 - Static IP or DHCP support
 - Preview, apply, list, and status commands
-- Sensible defaults (`/etc/netcraft.toml`)
+- Sensible defaults (`/etc/adn.toml`)
 
 ## Usage
 
 ```bash
-sudo netcraft apply
-netcraft preview [/path/to/config.toml]
-netcraft status
+sudo adn apply
+adn preview [/path/to/config.toml]
+adn status
 

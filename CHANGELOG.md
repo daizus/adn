@@ -12,5 +12,5 @@
 - VLAN support
 - Preview / Apply / List / Status
 - Idempotent and clean output
-- Config file at /etc/netcraft.toml (or CLI override)
+- Config file at /etc/adn.toml (or CLI override)
 
