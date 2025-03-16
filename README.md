@@ -1,23 +1,50 @@
 # adn
 
-**adn** is a declarative network orchestrator for Linux.
+**adn** is an Agnostic Declarative Network orchestrator for Linux.
 
-🚧 **v0.1.0 — Ephemeral only**  
-Applies bridges, VLANs, and IPs at runtime using a `adn.toml` file.  
-Persistent config generation (e.g., /etc/network/interfaces) is planned for later.
+⚡ `adn` applies network configurations like bridges, VLANs, static or dynamic IPs from a central TOML file — cleanly, idempotently, and fast.
 
-## Features
+---
 
-- Declarative TOML config
-- Idempotent bridge and VLAN creation
-- Static IP or DHCP support
-- Preview, apply, list, and status commands
-- Sensible defaults (`/etc/adn.toml`)
+## 🚧 v0.1.1 — Ephemeral runtime orchestrator
 
-## Usage
+- Applies bridges, VLANs, and IPs at runtime (no reboot required)
+- Includes rollback: auto-undo partial changes on failure
+- Includes reset: fully remove bridges/VLANs from config
+- Persistence to system-native config is coming in v0.2+
+
+---
+
+## 🔧 Features
+
+- ✅ Declarative TOML config (`/etc/adn.toml` or custom path)
+- ✅ Idempotent bridge & VLAN creation
+- ✅ Static IP or DHCP support
+- ✅ Commands:
+  - `apply` – apply configuration
+  - `preview` – dry-run (show what would be created)
+  - `status` – show live interface state
+  - `list` – show parsed config
+  - `reset` – delete everything defined in config
+- ✅ Transactional rollback on partial failure
+
+---
+
+## 🚀 Usage
 
 ```bash
+# Apply the network config
 sudo adn apply
-adn preview [/path/to/config.toml]
+
+# Preview changes
+adn preview
+
+# Show current system state
 adn status
 
+# Remove all bridges/VLANs defined in config
+sudo adn reset
+
+# Optional: specify config path
+adn apply /path/to/custom.toml
+```
