@@ -1,6 +1,7 @@
 use crate::config::load_config;
 use crate::system::has_ip;
 use crate::system::interface_exists;
+use crate::system::interface_has_ip;
 use std::path::Path;
 use std::process::Command;
 
@@ -222,10 +223,15 @@ pub fn apply(config_path: &Path) {
             }
 
             if let Some(ip) = &vlan.ip {
-                let _ = Command::new("ip")
-                    .args(["addr", "add", ip, "dev", &name])
-                    .status()
-                    .expect("Failed to assign IP to VLAN interface");
+                if interface_has_ip(&name, ip) {
+                    println!("{} already has IP {}. Skipping.", name, ip);
+                } else {
+                    println!("Assigning IP {}: to {}", ip, name);
+                    let _ = Command::new("ip")
+                        .args(["addr", "add", ip, "dev", &name])
+                        .status()
+                        .expect("Failed to assign IP to VLAN interface");
+                }
             }
 
             let _ = Command::new("ip")

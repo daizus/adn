@@ -26,3 +26,18 @@ pub fn has_ip(name: &str) -> bool {
         Err(_) => false,
     }
 }
+
+/// Check if and interface already has a particular IPv4 address
+pub fn interface_has_ip(name: &str, ip: &str) -> bool {
+    let output = Command::new("ip")
+        .args(["-4", "addr", "show", name])
+        .output();
+
+    match output {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.contains(ip)
+        }
+        Err(_) => false,
+    }
+}
