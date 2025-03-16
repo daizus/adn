@@ -25,3 +25,16 @@ rm "$DIST_DIR/$BIN_NAME" "$DIST_DIR/install.sh"
 
 echo "✅ Package created at: $DIST_DIR/$TAR_NAME"
 
+echo "🚀 Publishing release to GitHub..."
+
+# Check if the tag exists on GitHub
+if ! gh release view "v$VERSION" >/dev/null 2>&1; then
+    gh release create "v$VERSION" "dist/$TAR_NAME" \
+      --title "adn v$VERSION" \
+      --notes "See CHANGELOG.md for details."
+else
+    gh release upload "v$VERSION" "dist/$TAR_NAME" --clobber
+fi
+
+echo "✅ Release pushed to GitHub: https://github.com/daizus/adn/releases/tag/v$VERSION"
+
