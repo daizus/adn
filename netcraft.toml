@@ -1,0 +1,8 @@
+[bridge.vmbr0]
+interfaces = ['enp0s5']
+dhcp = true
+
+[vlan.vm_vlan10]
+id = 10
+parent = 'vmbr0'
+ip = '192.168.10.1/24'

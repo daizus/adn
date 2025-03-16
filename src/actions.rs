@@ -1,0 +1,237 @@
+use crate::config::load_config;
+use crate::system::has_ip;
+use crate::system::interface_exists;
+use std::path::Path;
+use std::process::Command;
+
+pub fn list(config_path: &Path) {
+    let config = load_config(config_path);
+
+    println!("Bridges:");
+    if let Some(bridges) = config.bridge {
+        for (name, bridge) in bridges {
+            let iface_list = bridge.interfaces.join(", ");
+            let dhcp = bridge.dhcp.unwrap_or(false);
+            let ip = bridge.ip.unwrap_or_else(|| "-".into());
+            println!(
+                "  - {} (interfaces: {}, ip: {}, dhcp: {})",
+                name, iface_list, ip, dhcp
+            );
+        }
+    } else {
+        println!("  (none)");
+    }
+
+    println!("\nVLANs:");
+    if let Some(vlans) = config.vlan {
+        for (name, vlan) in vlans {
+            let ip = vlan.ip.as_deref().unwrap_or("-");
+            println!(
+                "  - {} (id: {}, parent: {}, ip: {})",
+                name, vlan.id, vlan.parent, ip
+            );
+        }
+    } else {
+        println!("  (none)");
+    }
+}
+
+pub fn status(config_path: &Path) {
+    let config = load_config(config_path);
+
+    println!("Status:");
+
+    if let Some(bridges) = config.bridge {
+        for (name, _) in bridges {
+            print_interface_status(&name);
+        }
+    }
+
+    if let Some(vlans) = config.vlan {
+        for (name, _) in vlans {
+            print_interface_status(&name);
+        }
+    }
+}
+
+fn print_interface_status(name: &str) {
+    if !interface_exists(name) {
+        println!("  {:<12} MISSING", name);
+        return;
+    }
+
+    // Get interface state
+    let state = get_interface_state(name).unwrap_or("UNKNOWN".into());
+
+    // Get IP address
+    let ip = get_interface_ip(name).unwrap_or_else(|| "-".to_string());
+
+    println!("  {:<12} {:<6} {}", name, state, ip);
+}
+
+fn get_interface_state(name: &str) -> Option<String> {
+    let output = Command::new("ip")
+        .args(["link", "show", name])
+        .output()
+        .ok()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if line.contains(name) {
+            if line.contains("state UP") {
+                return Some("UP".to_string());
+            } else if line.contains("state DOWN") {
+                return Some("DOWN".to_string());
+            }
+        }
+    }
+
+    None
+}
+
+fn get_interface_ip(name: &str) -> Option<String> {
+    let output = Command::new("ip")
+        .args(["-4", "addr", "show", name])
+        .output()
+        .ok()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if line.trim_start().starts_with("inet ") {
+            let parts: Vec<&str> = line.trim().split_whitespace().collect();
+            if parts.len() >= 2 {
+                return Some(parts[1].to_string()); // e.g. "192.168.10.1/24"
+            }
+        }
+    }
+
+    None
+}
+
+pub fn preview(config_path: &Path) {
+    let config = load_config(config_path);
+    println!("--- Previewing config ---");
+    if let Some(bridges) = config.bridge {
+        for (name, bridge) in bridges {
+            println!("Would create bridge: {name}");
+            println!("  Interfaces: {:?}", bridge.interfaces);
+            if let Some(ip) = bridge.ip {
+                println!("  Assign IP: {ip}");
+            }
+            if bridge.dhcp.unwrap_or(false) {
+                println!("  DHCP enabled");
+            }
+        }
+    }
+
+    if let Some(vlans) = config.vlan {
+        for (name, vlan) in vlans {
+            println!("Would create VLAN: {name} (id {})", vlan.id);
+            println!("  Parent interface: {}", vlan.parent);
+            if let Some(ip) = vlan.ip {
+                println!("  Assign IP: {ip}");
+            }
+        }
+    }
+}
+
+pub fn apply(config_path: &Path) {
+    let config = load_config(config_path);
+
+    if let Some(bridges) = config.bridge {
+        for (name, bridge) in bridges {
+            println!("Applying bridge: {}", name);
+
+            // 1. Create bridge if it doesn't already exist
+            if !interface_exists(&name) {
+                println!("Checking bridge: {}", name);
+                let _ = Command::new("ip")
+                    .args(["link", "add", &name, "type", "bridge"])
+                    .status()
+                    .expect("Failed to create bridge.");
+            } else {
+                println!("Bridge {} already exists. Skiping creation.", name);
+            }
+
+            // 2. Add interfaces to bridge
+            for iface in &bridge.interfaces {
+                let _ = Command::new("ip")
+                    .args(["link", "set", iface, "master", &name])
+                    .status()
+                    .expect("Failed to add interface to bridge.");
+            }
+
+            // 3. Bring up the bridge
+            let _ = Command::new("ip")
+                .args(["link", "set", &name, "up"])
+                .status()
+                .expect("Failed to bring up bridge.");
+
+            // 4. Bring up each interface
+            for iface in &bridge.interfaces {
+                let _ = Command::new("ip")
+                    .args(["link", "set", iface, "up"])
+                    .status()
+                    .expect("Failed to bring up interface");
+            }
+
+            // 5. Assign static IP if defined
+            if let Some(ip) = &bridge.ip {
+                println!("Assigning static IP {} to {}", ip, name);
+                let _ = Command::new("ip")
+                    .args(["addr", "add", ip, "dev", &name])
+                    .status()
+                    .expect("Failed to assign IP address");
+            } else if bridge.dhcp.unwrap_or(false) {
+                if has_ip(&name) {
+                    println!("{} already has an IP address. Skipping dhclient.", name);
+                } else {
+                    println!("Running dhclient on {}", name);
+                    let _ = Command::new("dhclient")
+                        .arg(&name)
+                        .status()
+                        .expect("Failed to run dhclient");
+                }
+            }
+        }
+        println!("Done.");
+    }
+
+    if let Some(vlans) = config.vlan {
+        for (name, vlan) in vlans {
+            println!("Applying VLAN: {} (id {})", name, vlan.id);
+
+            if !interface_exists(&name) {
+                let _ = Command::new("ip")
+                    .args([
+                        "link",
+                        "add",
+                        "link",
+                        &vlan.parent,
+                        "name",
+                        &name,
+                        "type",
+                        "vlan",
+                        "id",
+                        &vlan.id.to_string(),
+                    ])
+                    .status()
+                    .expect("Failed to create VLAN interface");
+            } else {
+                println!("VLAN interface {} already exists. Skipping creation.", name);
+            }
+
+            if let Some(ip) = &vlan.ip {
+                let _ = Command::new("ip")
+                    .args(["addr", "add", ip, "dev", &name])
+                    .status()
+                    .expect("Failed to assign IP to VLAN interface");
+            }
+
+            let _ = Command::new("ip")
+                .args(["link", "set", &name, "up"])
+                .status()
+                .expect("Failed to bring up VLAN interface.");
+        }
+    }
+}
