@@ -2,8 +2,45 @@ use crate::config::load_config;
 use crate::system::{has_ip, interface_exists, interface_has_ip};
 use crate::types::{AppliedChange, ApplyAction};
 use crate::{namespace, rollback};
+use std::fs;
 use std::path::Path;
 use std::process::Command;
+
+pub fn init() {
+    let path = Path::new("/etc/adn.toml");
+
+    if path.exists() {
+        println!("Config already exists at /etc/adn.toml");
+        return;
+    }
+
+    let example = r#"
+# Example ADN configuration
+
+[bridge.vmbr0]
+interfaces = ['enp0s5']
+dhcp = true
+
+[bridge.InternalA]
+interfaces = []
+ip = "10.1.0.1/24"
+
+[vlan.vlan10]
+parent = "vmbr0"
+id = 10
+ip = "192.168.10.1/24"
+
+[namespace.ns1]
+veth = "vethA"
+peer = "vethA-br"
+ip = "10.1.0.2/24"
+bridge = "InternalA"
+"#;
+    match fs::write(path, example.trim_start()) {
+        Ok(_) => println!("✅ Created example config at /etc/adn.toml"),
+        Err(e) => eprintln!("❌ Failed to write config: {}", e),
+    }
+}
 
 pub fn list(config_path: &Path) {
     let config = load_config(config_path);

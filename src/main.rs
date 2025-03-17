@@ -34,5 +34,8 @@ fn main() {
             let path = resolve_config_path(config_path);
             crate::actions::reset(&path);
         }
+        Command::Init => {
+            crate::actions::init();
+        }
     }
 }

@@ -43,12 +43,7 @@ dhcp = true
 interfaces = []
 ip = "10.1.0.1/24"
 
-[vlan.bartomsrl]
-parent = 'vmbr0'
-id = 1141
-ip = '10.11.41.101/24'
-
-[vlan.dalmine-ls]
+[vlan.1043]
 parent = 'vmbr0'
 id = 1043
 ip = '10.10.43.101/24'
