@@ -1,6 +1,7 @@
 mod actions;
 mod cli;
 mod config;
+mod namespace;
 mod rollback;
 mod system;
 mod types;

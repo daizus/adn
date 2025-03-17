@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -18,9 +19,18 @@ pub struct Vlan {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct NamespaceConfig {
+    pub veth: String,
+    pub peer: String,
+    pub ip: String,
+    pub bridge: Option<String>, // optional: attach to bridge
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub bridge: Option<std::collections::HashMap<String, Bridge>>,
     pub vlan: Option<std::collections::HashMap<String, Vlan>>,
+    pub namespace: Option<HashMap<String, NamespaceConfig>>,
 }
 
 pub fn resolve_config_path(input: &Option<PathBuf>) -> PathBuf {

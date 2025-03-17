@@ -1,7 +1,7 @@
 use crate::config::load_config;
-use crate::rollback;
 use crate::system::{has_ip, interface_exists, interface_has_ip};
 use crate::types::{AppliedChange, ApplyAction};
+use crate::{namespace, rollback};
 use std::path::Path;
 use std::process::Command;
 
@@ -35,6 +35,19 @@ pub fn list(config_path: &Path) {
     } else {
         println!("  (none)");
     }
+
+    if let Some(namespaces) = config.namespace {
+        println!("\nNamespaces:");
+        for (name, ns) in namespaces {
+            println!(
+                "  - {} (veth: {} <-> {}, ip: {})",
+                name, ns.veth, ns.peer, ns.ip
+            );
+            if let Some(br) = ns.bridge {
+                println!("    Attached to bridge: {}", br);
+            }
+        }
+    }
 }
 
 pub fn status(config_path: &Path) {
@@ -51,6 +64,50 @@ pub fn status(config_path: &Path) {
     if let Some(vlans) = config.vlan {
         for (name, _) in vlans {
             print_interface_status(&name);
+        }
+    }
+
+    if let Some(namespaces) = config.namespace {
+        println!("\nNamespaces:");
+
+        for (name, ns) in namespaces {
+            // Build: ip netns exec <name> ip -4 addr show <veth>
+            let output = Command::new("ip")
+                .args(["netns", "exec", &name, "ip", "-4", "addr", "show", &ns.veth])
+                .output();
+
+            match output {
+                Ok(output) if output.status.success() => {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    let mut iface_ip = "-".to_string();
+                    let mut iface_state = "DOWN".to_string();
+
+                    for line in stdout.lines() {
+                        if line.trim_start().starts_with("inet ") {
+                            let parts: Vec<&str> = line.split_whitespace().collect();
+                            if parts.len() >= 2 {
+                                iface_ip = parts[1].to_string();
+                            }
+                        }
+
+                        if line.trim_start().starts_with("state") {
+                            let parts: Vec<&str> = line.split_whitespace().collect();
+                            if parts.len() >= 2 {
+                                iface_state = parts[1].to_string();
+                            }
+                        }
+                    }
+
+                    println!(
+                        "  [{:<6}] {:<10} {:<6} {}",
+                        name, ns.veth, iface_state, iface_ip
+                    );
+                }
+
+                _ => {
+                    println!("  [{:<6}] {:<10} MISSING", name, ns.veth);
+                }
+            }
         }
     }
 }
@@ -131,6 +188,17 @@ pub fn preview(config_path: &Path) {
             println!("  Parent interface: {}", vlan.parent);
             if let Some(ip) = vlan.ip {
                 println!("  Assign IP: {ip}");
+            }
+        }
+    }
+
+    if let Some(namespaces) = config.namespace {
+        for (name, ns) in namespaces {
+            println!("Would create namespace: {}", name);
+            println!("  veth pair: {} <-> {}", ns.veth, ns.peer);
+            println!("  Assign IP: {}", ns.ip);
+            if let Some(br) = &ns.bridge {
+                println!("  Attach to bridge: {}", br);
             }
         }
     }
@@ -281,6 +349,13 @@ fn try_apply(config_path: &Path, _changes: &mut Vec<AppliedChange>) -> Result<()
         }
     }
 
+    if let Some(namespaces) = config.namespace {
+        for (name, ns) in namespaces {
+            namespace::apply_namespace(&name, &ns.veth, &ns.peer, &ns.ip, ns.bridge.as_deref())
+                .map_err(|e| format!("Namespace {} setup failed: {}", name, e))?;
+        }
+    }
+
     Ok(())
 }
 
@@ -308,6 +383,24 @@ pub fn reset(config_path: &Path) {
             } else {
                 println!("Bridge {} not found, skipping", name);
             }
+        }
+    }
+
+    if let Some(namespaces) = config.namespace {
+        for (name, ns) in namespaces {
+            // Delete the veth peer (on the host)
+            if interface_exists(&ns.peer) {
+                println!("Deleting veth peer interface: {}", ns.peer);
+                let _ = Command::new("ip")
+                    .args(["link", "delete", &ns.peer])
+                    .status();
+            } else {
+                println!("veth peer {} not found, skipping", ns.peer);
+            }
+
+            // Delete the namespace
+            println!("Deleting namespace: {}", name);
+            let _ = Command::new("ip").args(["netns", "delete", &name]).status();
         }
     }
 
