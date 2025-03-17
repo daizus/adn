@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.1.2 - Namespace support
+
+### Added
+- ✨ Declarative network namespaces with veth pairs
+- 🧠 `adn status` now inspects and reports interfaces inside namespaces
+- 📜 `adn list` now includes namespace definitions
+- 🧼 `adn reset` removes namespaces and associated veth interfaces
+- ✅ `preview` includes planned namespace creation
+
+### Fixed
+- `status` properly detects missing namespaces and veths
+- Improved output consistency and error detection
+
+---
+
 ## v0.1.1 - Transactional rollback & reset
 
 ### Added

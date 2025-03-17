@@ -27,6 +27,44 @@
   - `list` – show parsed config
   - `reset` – delete everything defined in config
 - ✅ Transactional rollback on partial failure
+- 🧱 Namespace + veth support (FreeBSD jail-style L2 isolation)
+
+---
+
+## 🔧 Example config
+
+(default in */etc/adn.toml*)
+```toml
+[bridge.vmbr0]
+interfaces = ['enp0s5']
+dhcp = true
+
+[bridge.InternalA]
+interfaces = []
+ip = "10.1.0.1/24"
+
+[vlan.bartomsrl]
+parent = 'vmbr0'
+id = 1141
+ip = '10.11.41.101/24'
+
+[vlan.dalmine-ls]
+parent = 'vmbr0'
+id = 1043
+ip = '10.10.43.101/24'
+
+[namespace.ns1]
+veth = "vethA"
+peer = "vethA-br"
+ip = "10.1.0.2/24"
+bridge = "InternalA"
+
+[namespace.ns2]
+veth = "vethB"
+peer = "vethB-br"
+ip = "10.1.0.3/24"
+bridge = "InternalA"
+```
 
 ---
 
