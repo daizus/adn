@@ -6,9 +6,9 @@
 
 ---
 
-## 🚧 v0.1.1 — Ephemeral runtime orchestrator
+## 🚧 v0.1.2 — Ephemeral runtime orchestrator
 
-- Applies bridges, VLANs, and IPs at runtime (no reboot required)
+- Applies bridges, VLANs, namespaces and IPs at runtime (no reboot required)
 - Includes rollback: auto-undo partial changes on failure
 - Includes reset: fully remove bridges/VLANs from config
 - Persistence to system-native config is coming in v0.2+
