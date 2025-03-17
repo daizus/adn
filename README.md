@@ -1,6 +1,6 @@
 # adn
 
-**adn** is an Agnostic Declarative Network orchestrator for Linux.
+**adn** is an Agnostic Declarative Network orchestrator.
 
 ⚡ `adn` applies network configurations like bridges, VLANs, static or dynamic IPs from a central TOML file — cleanly, idempotently, and fast.
 
